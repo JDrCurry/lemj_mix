@@ -1,2 +1,4 @@
 ignore
 lerobot_dataset
+__pycache__
+.vscode

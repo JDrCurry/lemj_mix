@@ -1,5 +1,6 @@
 """
 rerun-sdk 适配到老版本的 0.22.1
+conda install libiconv
 """
 import sys
 import time
@@ -51,7 +52,7 @@ CHUNK_ID = f"{CHUNK_INDEX:03d}"  # chunk ID，如"000"
 SIM_SPEED = 1.0
 
 # 是否自动清理缓存帧目录
-CLEAR_TMP_FRAMES = True
+CLEAR_TMP_FRAMES = False
 
 # ============ 初始化 ============
 
@@ -418,7 +419,7 @@ def run_data_collection(episode_id=0):
         else:
             print("录制视频时长: 0 秒")
         
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
         return episode_length
 
 # 主程序

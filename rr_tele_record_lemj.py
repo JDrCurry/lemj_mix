@@ -1,6 +1,8 @@
 """
 rerun-sdk 适配到老版本的 0.22.1
+conda install libiconv
 """
+from dataclasses import dataclass
 import sys
 import time
 import os
@@ -15,7 +17,16 @@ import json
 from pathlib import Path
 import threading
 import rerun as rr
-import shutil  # 新增导入
+import shutil
+
+import draccus
+import queue  # 用于线程安全的队列
+from lerobot.teleoperators import (
+    TeleoperatorConfig,
+    make_teleoperator_from_config,
+)
+from lerobot.teleoperators import koch_leader, so100_leader, so101_leader  # noqa: F401
+
 
 # ============ 配置参数 ============
 # 模型和场景文件
@@ -51,7 +62,102 @@ CHUNK_ID = f"{CHUNK_INDEX:03d}"  # chunk ID，如"000"
 SIM_SPEED = 1.0
 
 # 是否自动清理缓存帧目录
-CLEAR_TMP_FRAMES = True
+CLEAR_TMP_FRAMES = False
+
+# 指令参数
+@dataclass
+class TeleoperateSimConfig:
+    """
+    执行示例（使用前确认ACM）:
+    python -m lerobot.rr_tele_record_lemj.py --teleop.type=so101_leader --teleop.port=/dev/ttyACM0 --teleop.id=my_awesome_leader_arm
+    """
+    teleop: TeleoperatorConfig
+
+# 自行测量real-sim关节偏置量
+def teleop_offset(action: list[float]):
+    """
+    关节偏置量
+    -0.0612
+    0.0175
+    0.112
+    0.0447
+    0.119
+    0.948
+    """
+    action[0] -= -0.0612
+    action[1] -= 0.0175
+    action[2] -= 0.112
+    action[3] -= 0.0447
+    action[4] -= 0.119
+    # 夹爪模型安装孔位与leader不同，但与follower相同，要再偏置0.795
+    action[5] -= 0.948 - 0.795
+    # return action
+
+class TeleopData:
+    """线程安全的teleop数据存储和访问"""
+    def __init__(self):
+        self.action_queue = queue.Queue(maxsize=5)  # 存储最多5帧动作，避免内存溢出
+        self.last_action = np.zeros(len(JOINT_NAMES))  # 默认动作：6维数组（5关节 + 1夹爪）
+        self.lock = threading.Lock()  # 锁保护队列操作
+
+    def enqueue_action(self, action):
+        """异步线程调用：入队新动作帧"""
+        with self.lock:
+            if self.action_queue.full():
+                self.action_queue.get()  # 丢弃最旧帧
+            self.action_queue.put(action.copy())
+
+    def get_latest_action(self):
+        """主循环调用：非阻塞获取最新动作帧"""
+        with self.lock:
+            if not self.action_queue.empty():
+                # 消费所有帧，取最新
+                while not self.action_queue.empty():
+                    self.last_action = self.action_queue.get()
+            return self.last_action.copy()  # 返回副本，避免修改
+
+# 在全局变量后添加teleop相关变量
+# （假设cfg已解析）
+teleop_data = TeleopData()  # 共享数据实例
+exit_flag = [False]  # 全局退出标志
+
+# 添加异步读取线程函数
+def teleop_reader_thread(teleop, teleop_data, exit_flag):
+    """异步线程：持续读取teleop数据并入队"""
+    while not exit_flag[0]:
+        try:
+            # 读取teleop动作（参考teleoperate_sim.py）
+            action_dict = teleop.get_action()
+            joint_values = [
+                action_dict["shoulder_pan.pos"],
+                action_dict["shoulder_lift.pos"],
+                action_dict["elbow_flex.pos"],
+                action_dict["wrist_flex.pos"],
+                action_dict["wrist_roll.pos"],
+                action_dict["gripper.pos"],
+            ]
+            
+            # 转换为弧度
+            joint_values = np.deg2rad(joint_values)  
+
+            # 应用偏置（参考teleop_offset函数）
+            teleop_offset(joint_values)
+
+            action_array = np.array(joint_values)  # 转为numpy数组
+            teleop_data.enqueue_action(action_array)  # 入队
+
+        except Exception as e:
+            print(f"Teleop读取错误: {e}")  # 错误处理
+
+            # 入队默认值
+            teleop_data.enqueue_action(np.zeros(len(JOINT_NAMES)))
+
+        time.sleep(1/60)  # 控制读取频率，避免过度轮询
+
+# 在run_data_collection函数前添加action获取函数
+def get_teleop_action(teleop_data: TeleopData):
+    """主循环调用：锁保护地获取最新动作帧"""
+    return teleop_data.get_latest_action()  # 非阻塞，返回最新或上次帧
 
 # ============ 初始化 ============
 
@@ -341,7 +447,11 @@ def run_data_collection(episode_id=0):
                 mujoco.mj_step(model, data)
                 acc -= h
                 steps += 1
-            
+
+            # 获取teleop动作并应用（锁保护，非阻塞）
+            action = get_teleop_action(teleop_data)
+            data.ctrl[:] = action  # 应用到MuJoCo控制信号
+
             # 获取当前仿真时间和关节数据
             sim_time = data.time
             # 使用 rerun 的 set_time_seconds 接口来设置当前时间戳
@@ -418,11 +528,10 @@ def run_data_collection(episode_id=0):
         else:
             print("录制视频时长: 0 秒")
         
-        cv2.destroyAllWindows()
         return episode_length
 
-# 主程序
-if __name__ == "__main__":
+@draccus.wrap()
+def main(cfg: TeleoperateSimConfig):
     # 必须清理缓存帧目录，否则导致衔接到最长的视频
     if os.path.exists(temp_frames_dir):
         shutil.rmtree(temp_frames_dir)
@@ -430,6 +539,13 @@ if __name__ == "__main__":
     # 初始化rerun
     rr.init(RERUN_APP_NAME, spawn=True)
     
+    teleop = make_teleoperator_from_config(cfg.teleop)
+    teleop.connect()
+
+    # 启动异步线程
+    teleop_thread = threading.Thread(target=teleop_reader_thread, args=(teleop, teleop_data, exit_flag), daemon=True)
+    teleop_thread.start()
+
     # 采集多个episodes
     episode_lengths = []
     num_episodes = NUM_EPISODES  # 采集episodes数量
@@ -455,3 +571,9 @@ if __name__ == "__main__":
         shutil.rmtree(temp_frames_dir)
 
     print("采集流程结束。")
+
+    # 关闭teleop连接
+    teleop.disconnect()
+
+if __name__ == "__main__":
+    main()
