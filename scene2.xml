@@ -1,0 +1,74 @@
+<mujoco model="scene">
+    <include file="so101_new_calib.xml" />
+    <option timestep="0.002" gravity="0 0 -9.81"/>
+    
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="160" elevation="-20" />
+    </visual>
+
+    <asset>
+        <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512"
+            height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4"
+            rgb2="0.1 0.2 0.3"
+            markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5"
+            reflectance="0.2" />
+    </asset>
+
+    <worldbody>
+        <light pos="0 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" pos="0 0 0" type="plane" material="groundplane" />
+            <!-- 或者一个更完整的桌子 -->
+        <body name="table" pos="0 0 0">
+            <inertial pos="0 0 0" mass="10" diaginertia="1 1 1"/>
+            <!-- 桌面变为右半边：x 尺寸减半，位置向右移动一半宽度 -->
+            <geom name="table_top" type="box" size="0.1875 0.375 0.02" pos="0.1875 0 0.38" rgba="0.6 0.4 0.2 1" friction="1 0.005 0.0001"/>
+            <!-- 仅保留两条支撑腿，位于右半桌下方 -->
+            <geom name="table_leg_fr" type="box" size="0.03 0.03 0.18" pos=" 0.30 -0.30 0.18" rgba="0.5 0.3 0.2 1"/>
+            <geom name="table_leg_fl" type="box" size="0.03 0.03 0.18" pos=" 0.30  0.30 0.18" rgba="0.5 0.3 0.2 1"/>
+            <!-- 去掉所有 joint 让桌子静止不动 -->
+        </body>
+
+        <!-- 使用 push_cube_loop.xml 的 cube 定义替换原有随机方块，放置在桌面内部但不在中心 -->
+        <body name="cube" pos="0.28 0.05 0.44">
+            <freejoint name="cube" />
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="cube_geom" type="box" pos="0 0 0" size="0.015 0.015 0.015" solimp="2 1 0.01" solref="0.01 1" friction="1 0.005 0.0001" condim="4" rgba="0.5 0 0 1" />
+        </body>
+
+        <!-- 额外交互物块，位置靠近桌边并抬高，物理参数与 cube 保持一致 -->
+        <body name="box_big" pos=" 0.32  0.12 0.44">
+            <freejoint/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="box_big_geom" type="box" size="0.03 0.02 0.02" friction="1 0.005 0.0001" condim="4" rgba="0.9 0.4 0.1 1"/>
+        </body>
+        <body name="sphere_1" pos="0.14  0.20 0.44">
+            <freejoint/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="sphere_1_geom" type="sphere" size="0.02" friction="1 0.005 0.0001" condim="4" rgba="0.2 0.8 0.9 1"/>
+        </body>
+        <body name="cyl_1" pos=" 0.30 -0.12 0.44">
+            <freejoint/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="cyl_1_geom" type="cylinder" size="0.02 0.03" friction="1 0.005 0.0001" condim="4" rgba="0.3 0.7 0.2 1"/>
+        </body>
+        <body name="caps_1" pos="0.16 -0.12 0.44">
+            <freejoint/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="caps_1_geom" type="capsule" size="0.015 0.035" friction="1 0.005 0.0001" condim="4" rgba="0.8 0.2 0.8 1"/>
+        </body>
+        <body name="ellip_1" pos=" 0.20  0.22 0.44">
+            <freejoint/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="ellip_1_geom" type="ellipsoid" size="0.018 0.024 0.02" friction="1 0.005 0.0001" condim="4" rgba="0.9 0.9 0.2 1"/>
+        </body>
+        <body name="box_tall" pos="0.22  0.25 0.44">
+            <freejoint/>
+            <inertial pos="0 0 0" mass="0.05" diaginertia="0.00001125 0.00001125 0.00001125" />
+            <geom name="box_tall_geom" type="box" size="0.02 0.02 0.03" friction="1 0.005 0.0001" condim="4" rgba="0.2 0.4 0.9 1"/>
+        </body>
+    </worldbody>
+</mujoco>

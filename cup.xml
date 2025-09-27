@@ -1,0 +1,21 @@
+<mujoco>
+  <worldbody>
+    <!-- 桌子 -->
+    <body name="table" pos="0 0 0">
+      <geom name="table_geom" type="box" size="0.3 0.3 0.02" rgba="0.7 0.5 0.3 1"/>
+    </body>
+
+    <body name="pen_holder" pos="0.1 0 0.02">
+      <!-- 四面墙（厚度 3 mm，高 12 cm） -->
+      <geom type="box" size="0.003 0.04 0.10" pos="0.043 0 0.10" rgba="0.2 0.2 0.2 1"/>
+      <geom type="box" size="0.003 0.04 0.10" pos="-0.043 0 0.10" rgba="0.2 0.2 0.2 1"/>
+      <geom type="box" size="0.04 0.003 0.10" pos="0 0.043 0.10" rgba="0.2 0.2 0.2 1"/>
+      <geom type="box" size="0.04 0.003 0.10" pos="0 -0.043 0.10" rgba="0.2 0.2 0.2 1"/>
+
+      <!-- 底面（厚度 3 mm） -->
+      <geom type="box" size="0.04 0.04 0.003" pos="0 0 0.003" rgba="0.2 0.2 0.2 1"/>
+    </body>
+
+
+  </worldbody>
+</mujoco>
